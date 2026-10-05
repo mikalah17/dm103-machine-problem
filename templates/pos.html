@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Take Order{% endblock %}
+{% block content %}
+<form id="pos-form" method="post" action="{{ url_for('pos_action') }}" class="pos">
+  {# hidden default save button #}
+  <button type="submit" name="action" value="update" class="sr-only" tabindex="-1">Save</button>
+
+  <section class="pos-left">
+    <div class="panel">
+      <label for="customer">Customer name</label>
+      <input type="text" id="customer" name="customer" value="{{ customer }}"
+
+    <div id="menu">
+      {% for category, items in menu.items() %}
+      <div class="panel">
+        <h2 class="section-title">{{ category }}</h2>
+        <div class="tiles">
+          {% for m in items %}
+          <button type="submit" name="action" value="add:{{ m.id }}" data-id="{{ m.id }}"
+                  class="tile {% if m.id in in_cart %}picked{% endif %}">
+            {% if m.id in in_cart %}<span class="tile-qty">&times;{{ in_cart[m.id] }}</span>{% endif %}
+            <span class="tile-name">{{ m.name }}</span>
+            <span class="tile-price">{{ m.price|peso }}</span>
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <aside id="cart" class="pos-right">
+    <div class="panel cart">
+      <h2>Current Order</h2>
+
+      {% if lines %}
+      <ul class="lines">
+        {% for l in lines %}
+        <li class="line" data-price="{{ l.price }}">
+          <div class="line-top">
+            <span class="line-name">{{ l.name }}</span>
+            <span class="line-sub">{{ l.subtotal|peso }}</span>
+          </div>
+          <div class="line-ctrl">
+            <button type="submit" name="action" value="dec:{{ l.id }}" class="qty-btn" aria-label="Less">&minus;</button>
+            <input type="number" name="qty_{{ l.id }}" value="{{ l.qty }}" min="0" max="99" class="qty-input" aria-label="Quantity">
+            <button type="submit" name="action" value="inc:{{ l.id }}" class="qty-btn" aria-label="More">+</button>
+            <span class="unit">{{ l.price|peso }} each</span>
+            <button type="submit" name="action" value="remove:{{ l.id }}" class="remove" aria-label="Remove item">&#10005;</button>
+          </div>
+          <input type="text" name="note_{{ l.id }}" value="{{ l.note }}" class="note" maxlength="200"
+                 placeholder="Notes (e.g. no onions, substitute fries)">
+        </li>
+        {% endfor %}
+      </ul>
+
+      <div class="total-row">
+        <span>Total Amount</span>
+        <strong id="cart-total">{{ total|peso }}</strong>
+      </div>
+      <noscript>
+        <p class="hint">JavaScript is off. Press Update Order after changing a quantity.</p>
+        <button type="submit" name="action" value="update" class="btn ghost small">Update Order</button>
+      </noscript>
+      {% else %}
+      <p class="muted empty">No items yet.<br>Tap a menu item to add it.</p>
+      {% endif %}
+
+      <div class="checkout">
+        <h3>Payment Method</h3>
+        <div class="pay-methods">
+          {% for m in payment_methods %}
+          <label class="pill">
+            <input type="radio" name="payment_method" value="{{ m }}" {% if m == payment_method %}checked{% endif %}>
+            <span>{{ m }}</span>
+          </label>
+          {% endfor %}
+        </div>
+
+        <h3>Check Payment Status: Paid?</h3>
+        <button type="submit" name="action" value="log_paid" class="btn good block" {% if not lines %}disabled{% endif %}>
+          YES &ndash; Log Order &amp; Mark as Paid
+        </button>
+        <button type="submit" name="action" value="log_pending" class="btn warn block" {% if not lines %}disabled{% endif %}>
+          NO &ndash; Log as Pending Payment
+        </button>
+        <button type="submit" name="action" value="clear" class="btn ghost block" {% if not lines and not customer %}disabled{% endif %}>
+          Cancel Order
+        </button>
+      </div>
+    </div>
+  </aside>
+</form>
+{% endblock %}

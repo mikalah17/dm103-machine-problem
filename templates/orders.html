@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Orders{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2>Orders</h2>
+  <p class="muted">Click an order to open its receipt.</p>
+</div>
+
+<div class="tabs">
+  <a href="{{ url_for('all_orders') }}" class="tab {% if not selected %}active{% endif %}">All <span>{{ total_count }}</span></a>
+  {% for s in statuses %}
+  <a href="{{ url_for('all_orders', status=s) }}" class="tab {% if selected == s %}active{% endif %}">{{ s|title }} <span>{{ counts.get(s, 0) }}</span></a>
+  {% endfor %}
+</div>
+
+{% if orders %}
+<div class="order-list">
+  {% for o in orders %}
+  <article class="order-row" data-href="{{ url_for('view_order', order_id=o.id) }}" tabindex="0">
+    <div class="o-no"><a href="{{ url_for('view_order', order_id=o.id) }}">#{{ o.id|order_no }}</a></div>
+
+    <div class="o-main">
+      <strong>{{ o.customer_name }}</strong>
+      <span class="o-food">{{ o.food }}</span>
+    </div>
+
+    <div class="o-total">
+      <strong>{{ o.total_amount|peso }}</strong>
+      <span class="small muted">{{ o.payment_status }}{% if o.payment_method %} &middot; {{ o.payment_method }}{% endif %}</span>
+    </div>
+
+    <div class="o-status">
+      <span class="badge {{ o.status|slug }}">{{ o.status }}</span>
+      <span class="small muted">{{ o.created_at|when }}</span>
+    </div>
+
+    <div class="o-action">
+      {% if o.status in next_step %}
+      <form method="post" action="{{ url_for('next_status', order_id=o.id) }}">
+        <button type="submit" class="btn small">{{ next_step[o.status][1] }}</button>
+      </form>
+      {% elif o.status == 'PENDING PAYMENT' %}
+      <a class="btn small warn" href="{{ url_for('view_order', order_id=o.id) }}">Collect Payment</a>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="panel"><p class="muted">No orders here yet.</p></div>
+{% endif %}
+{% endblock %}

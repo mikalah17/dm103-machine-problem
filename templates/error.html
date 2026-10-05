@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Database Error{% endblock %}
+{% block content %}
+<div class="panel narrow">
+  <h2>Can't reach the database</h2>
+  <p>Check that MySQL is running, that you ran <code>schema.sql</code> in MySQL Workbench,
+     and that the user and password in <code>DB_CONFIG</code> (top of <code>app.py</code>) are correct.</p>
+  <p class="muted">Details: {{ message }}</p>
+  <a class="btn" href="{{ url_for('pos') }}">Try again</a>
+</div>
+{% endblock %}

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Receipt {{ order.id|order_no }}{% endblock %}
+{% block content %}
+<div class="order-layout">
+  <section class="receipt-col">
+    <article class="receipt">
+      <header class="receipt-head">
+        <h3>FOOD ORDERING</h3>
+        <p>Order Receipt</p>
+      </header>
+
+      <div class="rule"></div>
+      <dl class="meta">
+        <div><dt>Order No.</dt><dd>{{ order.id|order_no }}</dd></div>
+        <div><dt>Customer</dt><dd>{{ order.customer_name }}</dd></div>
+        <div><dt>Date</dt><dd>{{ order.created_at|when }}</dd></div>
+      </dl>
+
+      <div class="rule"></div>
+      <ul class="r-items">
+        {% for i in items %}
+        <li>
+          <div class="r-line"><span>{{ i.quantity }} x {{ i.item_name }}</span><span>{{ (i.unit_price * i.quantity)|peso }}</span></div>
+          <div class="r-sub">@ {{ i.unit_price|peso }} each</div>
+          {% if i.note %}<div class="r-note">Note: {{ i.note }}</div>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+
+      <div class="rule"></div>
+      <div class="r-total"><span>TOTAL</span><strong>{{ order.total_amount|peso }}</strong></div>
+
+      <div class="rule"></div>
+      <dl class="meta">
+        <div><dt>Payment</dt><dd>{{ order.payment_status }}{% if order.payment_method %} ({{ order.payment_method }}){% endif %}</dd></div>
+        {% if order.paid_at %}<div><dt>Paid on</dt><dd>{{ order.paid_at|when }}</dd></div>{% endif %}
+        <div><dt>Order Status</dt><dd>{{ order.status }}</dd></div>
+      </dl>
+
+      <div class="rule"></div>
+      <p class="thanks">Thank you for your order!</p>
+    </article>
+
+    <div class="actions no-print">
+      <button type="button" class="btn" data-print>Print Receipt</button>
+    </div>
+  </section>
+
+  <section class="side-col no-print">
+    <div class="panel">
+      <h2>Order Progress</h2>
+      <ol class="steps">
+        {% for s in steps %}
+        <li class="step {% if loop.index0 < current or order.status == COMPLETED %}done{% elif loop.index0 == current %}{{ 'warn' if order.status == PENDING else 'current' }}{% endif %}">{{ s }}</li>
+        {% endfor %}
+      </ol>
+    </div>
+
+    <div class="panel">
+      <h2>Manage Order</h2>
+      {% if next_step %}
+        <p class="muted">Payment is complete. Move the order to the next step.</p>
+        <form method="post" action="{{ url_for('next_status', order_id=order.id) }}">
+          <button type="submit" class="btn block">{{ next_step[1] }}</button>
+        </form>
+      {% elif order.status == PENDING %}
+        <p class="muted">Waiting for payment. This order will not be prepared until it is paid.</p>
+        <form method="post" action="{{ url_for('pay_order', order_id=order.id) }}">
+          <div class="pay-methods">
+            {% for m in payment_methods %}
+            <label class="pill">
+              <input type="radio" name="payment_method" value="{{ m }}" {% if loop.first %}checked{% endif %}>
+              <span>{{ m }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          <button type="submit" class="btn good block">Mark as Paid &ndash; {{ order.total_amount|peso }}</button>
+        </form>
+      {% else %}
+        <p class="muted">This order is completed.</p>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <h2>Process History</h2>
+      <ul class="history">
+        {% for h in history %}
+        <li>
+          <strong>{{ h.status }}</strong>
+          {% if h.remarks %}<span class="muted"> &ndash; {{ h.remarks }}</span>{% endif %}
+          <div class="small muted">{{ h.changed_at|when }}</div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="actions">
+      <a class="btn" href="{{ url_for('pos') }}">New Order</a>
+      <a class="btn ghost" href="{{ url_for('all_orders') }}">All Orders</a>
+    </div>
+  </section>
+</div>
+{% endblock %}
