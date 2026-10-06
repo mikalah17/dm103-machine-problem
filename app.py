@@ -6,10 +6,16 @@ Business Process: Online Food Ordering
 import os
 from datetime import datetime
 from decimal import Decimal
+from io import BytesIO
 
 import mysql.connector
 from flask import (Flask, abort, flash, g, redirect, render_template,
-                   request, session, url_for)
+                   request, send_file, session, url_for)
+from reportlab.lib.units import mm
+from reportlab.lib.utils import simpleSplit
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "bpm-food-ordering-demo")
@@ -20,13 +26,23 @@ DB_CONFIG = {
     "user": os.environ.get("DB_USER", "root"),
     "password": os.environ.get("DB_PASSWORD", "put__db_password_here"),  # <-- change this
     "database": os.environ.get("DB_NAME", "food_ordering_bpm"),
-    "charset": "utf8mb4",  
-    }
+    "charset": "utf8mb4",
+}
 
 PESO = "\u20b1"
 PAYMENT_METHODS = ["Cash", "GCash", "Maya", "Card"]
 
-# order statuses 
+# PDF fonts: built-in PDF fonts can't draw the peso sign, so use Arial from
+# Windows and fall back to "PHP " if it isn't found.
+FONT, FONT_BOLD, CUR = "Helvetica", "Helvetica-Bold", "PHP "
+try:
+    pdfmetrics.registerFont(TTFont("Arial", r"C:\Windows\Fonts\arial.ttf"))
+    pdfmetrics.registerFont(TTFont("Arial-Bold", r"C:\Windows\Fonts\arialbd.ttf"))
+    FONT, FONT_BOLD, CUR = "Arial", "Arial-Bold", PESO
+except Exception:
+    pass
+
+# order statuses
 PENDING = "PENDING PAYMENT"
 CONFIRMED = "CONFIRMED"
 PREPARING = "PREPARING"
@@ -331,6 +347,84 @@ def view_order(order_id):
         PENDING=PENDING,
         COMPLETED=COMPLETED,
     )
+
+
+@app.get("/order/<int:order_id>/receipt.pdf")
+def receipt_pdf(order_id):
+    """Download the receipt as an 80mm thermal-style PDF."""
+    order = get_order_or_404(order_id)
+    items = query("SELECT * FROM order_items WHERE order_id = %s ORDER BY id",
+                  (order_id,))
+
+    W, M, LH, SIZE = 80 * mm, 5 * mm, 12, 9
+    inner = W - 2 * M
+    money = lambda v: f"{CUR}{Decimal(v):,.2f}"
+
+    # rows: (kind, left, right, bold)
+    rows = []
+
+    def add(left="", right="", bold=False, kind="text"):
+        rows.append((kind, left, right, bold))
+
+    def wrapped(text, width, bold=False):
+        return simpleSplit(text, FONT_BOLD if bold else FONT, SIZE, width)
+
+    add("FOOD ORDERING", bold=True, kind="center")
+    add("Order Receipt", kind="center")
+    add(kind="line")
+    add("Order No.", f"{order['id']:03d}")
+    add("Customer", order["customer_name"])
+    if order.get("created_at"):
+        add("Date", order["created_at"].strftime("%b %d, %Y %I:%M %p"))
+    add(kind="line")
+
+    for i in items:
+        sub = i["unit_price"] * i["quantity"]
+        parts = wrapped(f"{i['quantity']} x {i['item_name']}", inner - 22 * mm)
+        add(parts[0], money(sub))
+        for extra in parts[1:]:
+            add(extra)
+        add(f"@ {money(i['unit_price'])} each")
+        if i.get("note"):
+            for n in wrapped(f"Note: {i['note']}", inner):
+                add(n)
+
+    add(kind="line")
+    add("TOTAL", money(order["total_amount"]), bold=True)
+    add(kind="line")
+    pay = order["payment_status"] + (
+        f" ({order['payment_method']})" if order["payment_method"] else "")
+    add("Payment", pay)
+    if order.get("paid_at"):
+        add("Paid on", order["paid_at"].strftime("%b %d, %Y %I:%M %p"))
+    add("Order Status", order["status"])
+    add(kind="line")
+    add("Thank you for your order!", kind="center")
+
+    H = 2 * M + len(rows) * LH
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=(W, H))
+    y = H - M - SIZE
+
+    for kind, left, right, bold in rows:
+        c.setFont(FONT_BOLD if bold else FONT, SIZE)
+        if kind == "line":
+            c.setDash(2, 2)
+            c.line(M, y + SIZE / 2 - 1, W - M, y + SIZE / 2 - 1)
+            c.setDash()
+        elif kind == "center":
+            c.drawCentredString(W / 2, y, left)
+        elif kind == "text":
+            c.drawString(M, y, left)
+            if right:
+                c.drawRightString(W - M, y, right)
+        y -= LH
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    return send_file(buf, mimetype="application/pdf", as_attachment=True,
+                     download_name=f"receipt-{order['id']:03d}.pdf")
 
 
 @app.post("/order/<int:order_id>/pay")

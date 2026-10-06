@@ -42,7 +42,7 @@
     </article>
 
     <div class="actions no-print">
-      <button type="button" class="btn" data-print>Print Receipt</button>
+      <a class="btn" href="{{ url_for('receipt_pdf', order_id=order.id) }}">Save Receipt (PDF)</a>
     </div>
   </section>
 
